@@ -1,0 +1,205 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>사진으로 만드는 일정 기록 (v14)</title>
+    <style>
+        /* 스타일 v13 기반, 링크 부분 수정 */
+        @import url('https://fonts.googleapis.com/css2?family=Nanum+Gothic:wght@400;700&display=swap');
+
+        body { font-family: 'Nanum Gothic', sans-serif; line-height: 1.6; padding: 20px; background-color: #f8f9fa; color: #343a40; }
+        .container { max-width: 900px; margin: auto; }
+        header h1 { text-align: center; color: #007bff; margin-bottom: 25px; }
+        /* ... (settings, file-input-section 등 v13 스타일 유지) ... */
+        .settings { margin-bottom: 20px; padding: 15px; background-color: #fff; border: 1px solid #dee2e6; border-radius: 8px; box-shadow: 0 1px 3px rgba(0,0,0,0.05); display: flex; gap: 15px; align-items: center; flex-wrap: wrap; }
+        .settings label { margin-right: 5px; font-size: 0.9em; color: #495057; }
+        .settings input[type="number"] { width: 60px; padding: 6px; border: 1px solid #ced4da; border-radius: 6px;}
+        .file-input-section { margin-bottom: 15px; }
+        .file-input-section button { padding: 10px 15px; background-color: #007bff; color: white; border: none; border-radius: 8px; cursor: pointer; transition: background-color 0.2s; }
+        .file-input-section button:hover { background-color: #0056b3; }
+        #photoInput { display: none; }
+        .file-label { padding: 10px 15px; background-color: #6c757d; color: white; border-radius: 8px; cursor: pointer; transition: background-color 0.2s; display: inline-block; margin-right: 10px; }
+        .file-label:hover { background-color: #5a6268; }
+        #selectedFilesDisplay { font-size: 0.85em; color: #6c757d; margin-top: 10px; background-color: #e9ecef; padding: 8px 12px; border-radius: 6px; border: 1px solid #dee2e6; word-break: break-all; }
+
+        .day-record { background-color: #fff; border: 1px solid #dee2e6; padding: 20px; margin-bottom: 25px; border-radius: 8px; box-shadow: 0 2px 6px rgba(0,0,0,0.07); }
+        .day-header { display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #e9ecef; padding-bottom: 10px; margin-bottom: 15px; }
+        .day-header h2 { margin: 0; color: #0056b3; font-size: 1.4em; }
+        .activity-record { border: 1px solid #e9ecef; padding: 15px; margin-bottom: 15px; border-radius: 8px; background-color: #f8f9fa; }
+        .activity-record p { margin: 5px 0; font-size: 0.95em; color: #495057; }
+        .activity-record .location-input-group { margin-top: 8px; display: flex; align-items: center; gap: 8px; }
+        .activity-record .location-input { flex-grow: 1; padding: 6px 8px; border: 1px solid #ced4da; border-radius: 6px; font-size: 0.9em; }
+        .activity-record .location-info { font-size: 0.85em; color: #6c757d; margin-top: 4px; } /* 좌표 링크 스타일 */
+        .activity-record .location-info a {
+            color: #007bff;
+            text-decoration: underline; /* 밑줄 추가 */
+            cursor: pointer; /* 커서 변경 */
+            margin-left: 5px; /* 아이콘과 간격 */
+        }
+        .activity-record .location-info a:hover { color: #0056b3; }
+         /* 지도 아이콘 (간단한 유니코드) */
+        .activity-record .location-info a::before {
+            content: '🗺️'; /* 지도 이모지 */
+            display: inline-block;
+            margin-right: 3px;
+            font-size: 1.1em;
+        }
+
+        .thumbnails { margin-top: 10px; display: flex; flex-wrap: wrap; gap: 8px; }
+        .thumbnails img { max-width: 80px; max-height: 80px; border: 1px solid #dee2e6; border-radius: 6px; object-fit: cover; cursor: pointer; transition: transform 0.2s; }
+        .thumbnails img:hover { transform: scale(1.1); }
+        .daily-summary-section { margin-top: 20px; display: flex; align-items: center; gap: 10px; }
+        .daily-summary-input { flex-grow: 1; padding: 10px; border: 1px solid #ced4da; border-radius: 8px; }
+        .ics-button { padding: 10px 15px; cursor: pointer; background-color: #28a745; color: white; border: none; border-radius: 8px; font-weight: bold; transition: background-color 0.2s; }
+        .ics-button:hover { background-color: #218838; }
+        #loading { display: none; text-align: center; font-weight: bold; color: #007bff; margin: 20px 0; }
+        .error { color: #dc3545; font-weight: bold; text-align: center; }
+    </style>
+</head>
+<body>
+<div class="container">
+    <header>
+        <h1>📄 사진으로 만드는 일정 기록 📄</h1>
+    </header>
+
+    <div class="settings">
+        <label for="timeThreshold">⏱️ 활동 묶기 시간 (분):</label>
+        <input type="number" id="timeThreshold" value="180" min="1">
+        <label for="distanceThreshold">🗺️ 활동 묶기 거리 (미터):</label>
+        <input type="number" id="distanceThreshold" value="500" min="0">
+    </div>
+
+    <div class="file-input-section">
+        <label for="photoInput" class="file-label">사진 선택</label>
+        <input type="file" id="photoInput" multiple accept="image/jpeg, image/jpg, text/plain">
+        <button onclick="processPhotos()">기록 정리 시작</button>
+        <div id="selectedFilesDisplay">선택된 파일이 없습니다.</div>
+    </div>
+
+    <p id="loading">사진을 읽고 정리하는 중...</p>
+    <p id="errorLog" class="error"></p>
+
+    <div id="results">
+        <!-- 날짜별 기록들이 여기에 표시됩니다 -->
+    </div>
+</div>
+
+    <!-- exifr 라이브러리 -->
+    <script src="https://cdn.jsdelivr.net/npm/exifr/dist/lite.umd.js"></script>
+
+    <script>
+        // --- 전역 변수 및 DOM 요소 (v13과 동일) ---
+        const photoInput = document.getElementById('photoInput');
+        const resultsDiv = document.getElementById('results');
+        const loadingIndicator = document.getElementById('loading');
+        const errorLog = document.getElementById('errorLog');
+        const timeThresholdInput = document.getElementById('timeThreshold');
+        const distanceThresholdInput = document.getElementById('distanceThreshold');
+        const selectedFilesDisplay = document.getElementById('selectedFilesDisplay');
+        photoInput.addEventListener('change', displaySelectedFileNames);
+        function displaySelectedFileNames() { /* ... (v13과 동일) ... */ if (!photoInput.files || photoInput.files.length === 0) { selectedFilesDisplay.textContent = '선택된 파일 없음.'; return; } let filenames = Array.from(photoInput.files).map(f => f.name); const maxFilesToShow = 5; let displayText = `선택 (${filenames.length}개): ${filenames.slice(0, maxFilesToShow).join(', ')}`; if (filenames.length > maxFilesToShow) { displayText += `, ... 외 ${filenames.length - maxFilesToShow}개`; } selectedFilesDisplay.textContent = displayText; }
+
+        // --- 메인 처리 함수 (v13과 동일) ---
+        async function processPhotos() { /* ... (파일 읽기, 메타데이터 처리, 정렬, 그룹핑 로직 v13과 동일) ... */
+            const files = photoInput.files; if (!files || files.length === 0) { alert('사진 선택 필요'); return; }
+            const TIME_THRESHOLD_MINUTES = parseInt(timeThresholdInput.value, 10) || 180; const DISTANCE_THRESHOLD_METERS = parseInt(distanceThresholdInput.value, 10) || 500;
+            loadingIndicator.style.display = 'block'; resultsDiv.innerHTML = ''; errorLog.textContent = ''; let allPhotoData = []; let fileReadErrors = 0; console.clear(); console.log("--- Processing (v14) ---");
+            const promises = Array.from(files).map(file => { /* ... (메타데이터 읽기) ... */ return new Promise(async (resolve) => { if (!file.type.match('image/jpeg')) { resolve(null); return; } try { const output = await exifr.parse(file); if (!output) { resolve(null); return; } const date = output.DateTimeOriginal; let isValidDate = (date instanceof Date && !isNaN(date)); let lat = output.latitude; let lon = output.longitude; let isValidGps = (typeof lat === 'number' && typeof lon === 'number' && !isNaN(lat) && !isNaN(lon) && Math.abs(lat) <= 90 && Math.abs(lon) <= 180); if (!isValidGps) { lat = null; lon = null; } if (isValidDate) { resolve({ file, name: file.name, date, lat, lon }); } else { resolve(null); } } catch (error) { console.error(`[${file.name}] Error:`, error); fileReadErrors++; resolve(null); } }); });
+            allPhotoData = (await Promise.all(promises)).filter(data => data !== null); if (fileReadErrors > 0) { errorLog.textContent += ` ${fileReadErrors}개 처리 오류.`; } if (allPhotoData.length === 0) { alert('처리 가능 사진 없음.'); loadingIndicator.style.display = 'none'; return; }
+            allPhotoData.sort((a, b) => a.date - b.date); console.log(`--- Metadata processed for ${allPhotoData.length} photos ---`);
+            const dailyGroups = []; let currentDayGroup = null; let currentActivity = null;
+            for (const photo of allPhotoData) { /* ... (그룹핑 로직) ... */ const photoDateString = photo.date.toDateString(); if (!currentDayGroup || currentDayGroup.dateString !== photoDateString) { if (currentDayGroup) { if (currentActivity) { currentDayGroup.activities.push(currentActivity); } dailyGroups.push(currentDayGroup); } currentDayGroup = { date: photo.date, dateString: photoDateString, activities: [] }; currentActivity = null; } if (!currentActivity) { currentActivity = createNewActivity(photo); } else { const lastPhotoInActivity = currentActivity.photos[currentActivity.photos.length - 1]; const timeDiffMinutes = (photo.date - lastPhotoInActivity.date) / (1000 * 60); let locationMatch = true; const hasCurrentLocation = photo.lat !== null && photo.lon !== null; const hasLastLocation = lastPhotoInActivity.lat !== null && lastPhotoInActivity.lon !== null; if (hasCurrentLocation && hasLastLocation) { const distance = calculateDistance(photo.lat, photo.lon, lastPhotoInActivity.lat, lastPhotoInActivity.lon); locationMatch = distance <= DISTANCE_THRESHOLD_METERS; } else if (hasCurrentLocation !== hasLastLocation) { locationMatch = false; } if (timeDiffMinutes <= TIME_THRESHOLD_MINUTES && locationMatch) { currentActivity.photos.push(photo); currentActivity.endDate = photo.date; } else { currentDayGroup.activities.push(currentActivity); currentActivity = createNewActivity(photo); } } } if (currentDayGroup) { if (currentActivity) { currentDayGroup.activities.push(currentActivity); } dailyGroups.push(currentDayGroup); } console.log(`--- Grouping complete (${dailyGroups.length} days) ---`);
+            displayDailyRecords(dailyGroups); loadingIndicator.style.display = 'none';
+        }
+
+        // '활동' 객체 생성 헬퍼 (v13과 동일)
+        function createNewActivity(photo) { /* ... v13 code ... */ return { photos: [photo], startDate: photo.date, endDate: photo.date, lat: photo.lat, lon: photo.lon, userLocationName: '' }; }
+
+        // --- 결과 표시 함수 (수정: 좌표 링크 텍스트/스타일 변경) ---
+        function displayDailyRecords(dailyGroups) {
+             resultsDiv.innerHTML = ''; if (dailyGroups.length === 0) { resultsDiv.textContent = '기록할 내용이 없습니다.'; return; }
+             dailyGroups.forEach((dayGroup, dayIndex) => {
+                const dayDiv = document.createElement('div'); dayDiv.className = 'day-record'; dayDiv.id = `day-${dayIndex}`;
+                const dayHeader = document.createElement('div'); dayHeader.className = 'day-header'; const dateTitle = document.createElement('h2'); dateTitle.textContent = `🗓️ ${formatDate(dayGroup.date, '.')} 기록`; dayHeader.appendChild(dateTitle); dayDiv.appendChild(dayHeader);
+                if (dayGroup.activities.length === 0) { const noActivities = document.createElement('p'); noActivities.textContent = "기록된 활동이 없습니다."; dayDiv.appendChild(noActivities); }
+                else {
+                    dayGroup.activities.forEach((activity, activityIndex) => {
+                        const activityDiv = document.createElement('div'); activityDiv.className = 'activity-record';
+                        const timeInfo = document.createElement('p'); timeInfo.innerHTML = `⏱️ <strong>시간:</strong> ${formatTime(activity.startDate)} ~ ${formatTime(activity.endDate)}`; activityDiv.appendChild(timeInfo);
+                        const locationGroupDiv = document.createElement('div'); locationGroupDiv.className = 'location-input-group'; const locationLabel = document.createElement('label'); locationLabel.htmlFor = `location-${dayIndex}-${activityIndex}`; locationLabel.textContent = `📍 장소:`; locationLabel.style.fontWeight = 'bold'; const locationInput = document.createElement('input'); locationInput.type = 'text'; locationInput.className = 'location-input'; locationInput.id = `location-${dayIndex}-${activityIndex}`; locationInput.placeholder = '장소를 입력하세요 (예: 카페 이름)'; locationInput.oninput = (e) => { activity.userLocationName = e.target.value; }; locationGroupDiv.appendChild(locationLabel); locationGroupDiv.appendChild(locationInput); activityDiv.appendChild(locationGroupDiv);
+
+                        // *** 좌표 링크 표시 개선 ***
+                        const locInfoP = document.createElement('p'); locInfoP.className = 'location-info';
+                        if (activity.lat !== null && activity.lon !== null) {
+                            locInfoP.innerHTML = `(좌표 확인: <a href="https://www.openstreetmap.org/?mlat=${activity.lat}&mlon=${activity.lon}#map=16/${activity.lat}/${activity.lon}" target="_blank" title="클릭하면 지도로 이동합니다">${activity.lat.toFixed(4)}, ${activity.lon.toFixed(4)}</a>)`; // title 속성 추가, 아이콘은 CSS로 처리
+                        } else { locInfoP.innerHTML = `(좌표 정보 없음)`; }
+                        activityDiv.appendChild(locInfoP);
+
+                        const photoCount = document.createElement('p'); photoCount.textContent = `🖼️ 사진 ${activity.photos.length}장`; activityDiv.appendChild(photoCount);
+                        const thumbnailsDiv = document.createElement('div'); thumbnailsDiv.className = 'thumbnails'; activity.photos.forEach(p => { /* ... 썸네일 생성 v13과 동일 ... */ const img = document.createElement('img'); img.title = `${p.name}\n${formatDateTime(p.date)}`; img.alt = p.name; img.loading = 'lazy'; const thumbReader = new FileReader(); thumbReader.onload = (e) => { img.src = e.target.result; }; thumbReader.onerror = () => { img.alt += " (미리보기 실패)"; }; const blobSlice = p.file.slice(0, 2 * 1024 * 1024); thumbReader.readAsDataURL(blobSlice); img.onclick = () => { const objectURL = URL.createObjectURL(p.file); window.open(objectURL, '_blank'); }; thumbnailsDiv.appendChild(img); }); activityDiv.appendChild(thumbnailsDiv);
+                        dayDiv.appendChild(activityDiv);
+                    });
+                }
+                const summaryDiv = document.createElement('div'); summaryDiv.className = 'daily-summary-section'; const summaryInput = document.createElement('input'); summaryInput.type = 'text'; summaryInput.className = 'daily-summary-input'; summaryInput.placeholder = `📝 ${formatDate(dayGroup.date, '.')} 일일 요약 (캘린더 제목)`; summaryInput.id = `summary-${dayIndex}`;
+                const icsButton = document.createElement('button'); icsButton.className = 'ics-button'; icsButton.textContent = '📅 캘린더 저장'; icsButton.onclick = () => downloadDailyICS(dayGroup, dayIndex);
+                summaryDiv.appendChild(summaryInput); summaryDiv.appendChild(icsButton); dayDiv.appendChild(summaryDiv);
+                resultsDiv.appendChild(dayDiv);
+             });
+        }
+
+        // --- 하루 단위 ICS 파일 다운로드 (수정: 장소명만 콤마로 연결) ---
+        function downloadDailyICS(dayGroup, dayIndex) {
+            const summaryInput = document.getElementById(`summary-${dayIndex}`);
+            const summary = summaryInput.value.trim() || `${formatDate(dayGroup.date, '.')} 기록`;
+
+            if (dayGroup.activities.length === 0) { alert("저장할 활동 기록이 없습니다."); return; }
+
+            const eventDate = dayGroup.date;
+            const dtstartAllDay = formatICSAllDayDate(eventDate);
+            const nextDay = new Date(eventDate); nextDay.setDate(eventDate.getDate() + 1);
+            const dtendAllDay = formatICSAllDayDate(nextDay);
+            const uid = `daily-record-locs-${dayGroup.dateString}-${Date.now()}@localapp`; // UID 변경
+            const dtstamp = formatICSDate(new Date());
+
+            // *** 설명 (Description) 생성: 입력된 장소명만 콤마로 연결 ***
+            const locationNames = dayGroup.activities
+                .map(activity => activity.userLocationName.trim()) // 각 활동의 장소명 가져오기 (양옆 공백 제거)
+                .filter(name => name !== ''); // 빈 장소명 제외
+
+            // 장소명이 하나라도 있을 경우 콤마와 공백으로 연결, 없으면 빈 문자열
+            const description = locationNames.length > 0 ? locationNames.join(', ') : '';
+
+            // iCalendar 형식 문자열 생성
+            const icsContent = [
+                'BEGIN:VCALENDAR', 'VERSION:2.0', 'PRODID:-//PhotoApp//DailyRecord v14//KO', 'CALSCALE:GREGORIAN',
+                'BEGIN:VEVENT', `UID:${uid}`, `DTSTAMP:${dtstamp}`,
+                `DTSTART;VALUE=DATE:${dtstartAllDay}`, `DTEND;VALUE=DATE:${dtendAllDay}`,
+                `SUMMARY:${escapeICSString(summary)}`,
+                 // 설명 필드에 장소 목록만 추가 (값이 있을 경우에만)
+                 (description ? `DESCRIPTION:${escapeICSString(description)}` : ''),
+                'END:VEVENT', 'END:VCALENDAR'
+            ].filter(line => line).join('\r\n');
+
+            // 파일 다운로드
+            const blob = new Blob([icsContent], { type: 'text/calendar;charset=utf-8' });
+            const link = document.createElement('a'); link.href = URL.createObjectURL(blob);
+            const safeSummary = summary.replace(/[^a-z0-9가-힣\s]/gi, '').replace(/\s+/g, '_');
+            link.download = `${formatDate(eventDate, '')}_${safeSummary || '일정기록'}.ics`;
+            link.click(); URL.revokeObjectURL(link.href);
+        }
+
+
+        // --- Helper Functions (v13과 동일) ---
+        function formatICSAllDayDate(date) { /* ... */ if (!(date instanceof Date) || isNaN(date)) return null; const y = date.getFullYear(); const m = String(date.getMonth() + 1).padStart(2, '0'); const d = String(date.getDate()).padStart(2, '0'); return `${y}${m}${d}`; }
+        function calculateDistance(lat1, lon1, lat2, lon2) { /* ... */ if (lat1 === null || lon1 === null || lat2 === null || lon2 === null) return Infinity; const R = 6371e3; const φ1 = lat1 * Math.PI / 180; const φ2 = lat2 * Math.PI / 180; const Δφ = (lat2 - lat1) * Math.PI / 180; const Δλ = (lon2 - lon1) * Math.PI / 180; const a = Math.sin(Δφ / 2) * Math.sin(Δφ / 2) + Math.cos(φ1) * Math.cos(φ2) * Math.sin(Δλ / 2) * Math.sin(Δλ / 2); const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(Math.max(0, 1 - a))); const d = R * c; return d; }
+        function formatDate(date, separator = '-') { /* ... */ if (!(date instanceof Date) || isNaN(date)) return '날짜 없음'; const year = date.getFullYear(); const month = String(date.getMonth() + 1).padStart(2, '0'); const day = String(date.getDate()).padStart(2, '0'); return `${year}${separator}${month}${separator}${day}`; }
+        function formatTime(date) { /* ... */ if (!(date instanceof Date) || isNaN(date)) return '시간 없음'; const hours = String(date.getHours()).padStart(2, '0'); const minutes = String(date.getMinutes()).padStart(2, '0'); return `${hours}:${minutes}`; }
+        function formatDateTime(date) { /* ... */ if (!(date instanceof Date) || isNaN(date)) return ''; return `${formatDate(date)} ${formatTime(date)}`; }
+        function formatICSDate(date) { /* ... */ if (!(date instanceof Date) || isNaN(date)) { date = new Date(); } return date.toISOString().replace(/[-:]/g, '').split('.')[0] + 'Z'; }
+        function escapeICSString(str) { /* ... */ if (!str) return ''; return str.replace(/\\/g, "\\\\").replace(/,/g, "\\,").replace(/;/g, "\\;").replace(/\n/g, "\\n"); }
+
+    </script>
+
+</body>
+</html>
